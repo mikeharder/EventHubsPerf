@@ -20,11 +20,14 @@ namespace EventHubsConsumePerf
 
         public class Options
         {
+            [Option('c', "clients", Default = 1)]
+            public int Clients { get; set; }
+
             [Option('p', "partitions", Default = 1)]
             public int Partitions { get; set; }
 
-            [Option('c', "clients", Default = 1)]
-            public int Clients { get; set; }
+            [Option('v', "verbose", Default = false)]
+            public bool Verbose { get; set; }
         }
 
         static async Task Main(string[] args)
@@ -41,17 +44,17 @@ namespace EventHubsConsumePerf
             var connectionString = Environment.GetEnvironmentVariable("EVENT_HUBS_CONNECTION_STRING");
 
             await Parser.Default.ParseArguments<Options>(args).MapResult(
-                async o => await Run(connectionString, o.Partitions, o.Clients),
+                async o => await Run(connectionString, o.Partitions, o.Clients, o.Verbose),
                 errors => Task.CompletedTask);
         }
 
-        static async Task Run(string connectionString, int partitions, int clients)
+        static async Task Run(string connectionString, int partitions, int clients, bool verbose)
         {
             // await SendMessages(connectionString);
-            await ReceiveMessages(connectionString, partitions, clients);
+            await ReceiveMessages(connectionString, partitions, clients, verbose);
         }
 
-        static async Task ReceiveMessages(string connectionString, int numPartitions, int numClients)
+        static async Task ReceiveMessages(string connectionString, int numPartitions, int numClients, bool verbose)
         {
             Console.WriteLine($"Receiving messages from {numPartitions} partitions using {numClients} client instances");
 
@@ -75,9 +78,15 @@ namespace EventHubsConsumePerf
                     var count = end - begin + 1;
                     totalCount += count;
 
-                    Console.WriteLine($"Partition: {partition.Id}, Begin: {begin}, End: {end}, Count: {count}");
+                    if (verbose)
+                    {
+                        Console.WriteLine($"Partition: {partition.Id}, Begin: {begin}, End: {end}, Count: {count}");
+                    }
                 }
-                Console.WriteLine($"Total Count: {totalCount}");
+                if (verbose)
+                {
+                    Console.WriteLine($"Total Count: {totalCount}");
+                }
 
                 var consumers = new EventHubConsumer[numPartitions];
                 for (var i = 0; i < numPartitions; i++)
