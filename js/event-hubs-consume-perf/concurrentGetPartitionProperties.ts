@@ -19,7 +19,7 @@ async function main(): Promise<void> {
     ];
     console.log(partitionsSequential);
 
-    let partitionsParallel = await Promise.all([
+    const partitionsParallel = await Promise.all([
       client.getPartitionProperties(partitionIds[2]),
       client.getPartitionProperties(partitionIds[3]),
     ]);
