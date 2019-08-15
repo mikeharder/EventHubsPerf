@@ -1,6 +1,5 @@
 package com.microsoft.eventhubsconsumeperf;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import com.azure.messaging.eventhubs.EventHubAsyncClient;
@@ -8,6 +7,8 @@ import com.azure.messaging.eventhubs.EventHubClientBuilder;
 import com.azure.messaging.eventhubs.PartitionProperties;
 
 import org.apache.commons.cli.*;
+
+import reactor.core.publisher.Flux;
 
 public class App {
     private static final String _eventHubName = "test";
@@ -61,16 +62,18 @@ public class App {
 
         EventHubAsyncClient[] clients = new EventHubAsyncClient[numClients];
         for (int i = 0; i < numClients; i++) {
-            clients[i] = new EventHubClientBuilder().connectionString(connectionString, _eventHubName).buildAsyncClient();
+            clients[i] = new EventHubClientBuilder().connectionString(connectionString, _eventHubName)
+                    .buildAsyncClient();
         }
 
         try {
             EventHubAsyncClient client = clients[0];
-            List<String> partitionIds = client.getPartitionIds().collectList().block();
-            List<PartitionProperties> partitions = new ArrayList<PartitionProperties>();
-            for (String partitionId : partitionIds) {
-                partitions.add(client.getPartitionProperties(partitionId).block());
-            }
+
+            Flux<String> partitionIds = client.getPartitionIds().take(numPartitions);
+            List<PartitionProperties> partitions = partitionIds.flatMap(id -> client.getPartitionProperties(id))
+                    .collectSortedList((PartitionProperties p1, PartitionProperties p2) -> Integer
+                            .compare(Integer.parseInt(p1.id()), Integer.parseInt(p2.id())))
+                    .block();
 
             long totalCount = 0;
             for (PartitionProperties partition : partitions) {
@@ -92,5 +95,9 @@ public class App {
                 client.close();
             }
         }
+
+        // Workaround for "IllegalThreadStateException on shutdown from maven exec plugin"
+        // https://github.com/ReactiveX/RxJava/issues/2833
+        System.exit(0);
     }
 }
