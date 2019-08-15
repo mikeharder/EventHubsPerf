@@ -24,6 +24,11 @@
       <artifactId>commons-cli</artifactId>
       <version>1.4</version>
     </dependency>
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-messaging-eventhubs</artifactId>
+      <version>5.0.0-preview.2</version>
+    </dependency>
   </dependencies>
 
   <build>

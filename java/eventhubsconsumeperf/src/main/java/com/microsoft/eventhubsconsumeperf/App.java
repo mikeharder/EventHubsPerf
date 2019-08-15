@@ -1,5 +1,12 @@
 package com.microsoft.eventhubsconsumeperf;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import com.azure.messaging.eventhubs.EventHubAsyncClient;
+import com.azure.messaging.eventhubs.EventHubClientBuilder;
+import com.azure.messaging.eventhubs.PartitionProperties;
+
 import org.apache.commons.cli.*;
 
 /**
@@ -55,5 +62,39 @@ public class App {
     static void ReceiveMessages(String connectionString, int numPartitions, int numClients, boolean verbose) {
         System.out.println(String.format("Receiving messages from %d partitions using %d client instances",
                 numPartitions, numClients));
+
+        EventHubAsyncClient[] clients = new EventHubAsyncClient[numClients];
+        for (int i = 0; i < numClients; i++) {
+            clients[i] = new EventHubClientBuilder().connectionString(connectionString, _eventHubName).buildAsyncClient();
+        }
+
+        try {
+            EventHubAsyncClient client = clients[0];
+            List<String> partitionIds = client.getPartitionIds().collectList().block();
+            List<PartitionProperties> partitions = new ArrayList<PartitionProperties>();
+            for (String partitionId : partitionIds) {
+                partitions.add(client.getPartitionProperties(partitionId).block());
+            }
+
+            long totalCount = 0;
+            for (PartitionProperties partition : partitions) {
+                long begin = partition.beginningSequenceNumber();
+                long end = partition.lastEnqueuedSequenceNumber();
+                long count = end - begin + 1;
+                totalCount += count;
+
+                if (verbose) {
+                    System.out.println(String.format("Partition: %s, Begin: %d, End: %d, Count: %d", partition.id(),
+                            begin, end, count));
+                }
+            }
+            if (verbose) {
+                System.out.println(String.format("Total Count: %d", totalCount));
+            }
+        } finally {
+            for (EventHubAsyncClient client : clients) {
+                client.close();
+            }
+        }
     }
 }
