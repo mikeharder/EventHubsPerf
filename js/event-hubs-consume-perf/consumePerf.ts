@@ -1,4 +1,5 @@
-import { EventHubClient, EventPosition, PartitionProperties } from '@azure/event-hubs';
+import { EventHubClient, EventPosition, PartitionProperties, EventHubConsumer } from '@azure/event-hubs';
+import { performance } from 'perf_hooks';
 import commander from 'commander';
 
 const eventHubName = 'test';
@@ -46,7 +47,7 @@ async function receiveMessages(connectionString: string, numPartitions: number, 
       partitions.push(await client.getPartitionProperties(partitionId));
     }
 
-    // If multiple calls to getPartitionProperties() are made concurrently, the returned Promise never resolve
+    // Concurrent calls to getPartitionProperties() are extremely slow (Azure/azure-sdk-for-js#4767)
     // const partitions = await Promise.all(partitionIds.map(id => client.getPartitionProperties(id)));
 
     let totalCount = 0;
@@ -63,45 +64,52 @@ async function receiveMessages(connectionString: string, numPartitions: number, 
     if (verbose) {
       console.log(`Total Count: ${totalCount}`);
     }
+
+    const consumers: EventHubConsumer[] = [];
+    for (let i = 0; i < numPartitions; i++) {
+      consumers[i] = clients[i % numClients].createConsumer(EventHubClient.defaultConsumerGroupName, partitions[i].partitionId, EventPosition.earliest());
+    }
+
+    try {
+      const receivePromises: Promise<number>[] = [];
+      const startMs = performance.now();
+      for (let i = 0; i < numPartitions; i++) {
+        receivePromises[i] = receiveAllMessages(consumers[i], partitions[i]);
+      }
+      const results = await Promise.all(receivePromises);
+      const endMs = performance.now();
+
+      const elapsedSeconds = (endMs - startMs) / 1000;
+      const messagesReceived = results.reduce((a, b) => a + b, 0);
+      const messagesPerSecond = messagesReceived / elapsedSeconds;
+      const megabytesPerSecond = (messagesPerSecond * bytesPerMessage) / (1024 * 1024);
+
+      console.log(`Received ${messagesReceived} messages of size ${bytesPerMessage} in ${elapsedSeconds.toFixed(2)}s ` +
+        `(${messagesPerSecond.toFixed(2)} msg/s, ${megabytesPerSecond.toFixed(2)} MB/s)`);
+    }
+    finally {
+      for (let consumer of consumers) {
+        await consumer.close();
+      }
+    }
   } finally {
     for (let client of clients) {
       await client.close();
     }
   }
+}
 
-  //       var consumers = new EventHubConsumer[numPartitions];
-  //       for (var i = 0; i < numPartitions; i++)
-  //       {
-  //           consumers[i] = clients[i % numClients].CreateConsumer(EventHubConsumer.DefaultConsumerGroupName, partitions[i].Id, EventPosition.Earliest);
-  //       }
+async function receiveAllMessages(consumer: EventHubConsumer, partition: PartitionProperties): Promise<number> {
+  let messagesReceived = 0;
+  let lastSequenceNumber = -1;
 
-  //       try
-  //       {
-  //           var receiveTasks = new Task<(int messagesReceived, long lastSequenceNumber)>[numPartitions];
-  //           var sw = Stopwatch.StartNew();
-  //           for (var i = 0; i < numPartitions; i++)
-  //           {
-  //               receiveTasks[i] = ReceiveAllMessages(consumers[i], partitions[i]);
-  //           }
-  //           var results = await Task.WhenAll(receiveTasks);
-  //           sw.Stop();
+  while (lastSequenceNumber < partition.lastEnqueuedSequenceNumber) {
+    const events = await consumer.receiveBatch(messagesPerBatch);
+    messagesReceived += events.length;
+    lastSequenceNumber = events[events.length - 1].sequenceNumber;
+  }
 
-  //           var elapsed = sw.Elapsed.TotalSeconds;
-  //           var messagesReceived = results.Select(r => r.messagesReceived).Sum();
-  //           var messagesPerSecond = messagesReceived / elapsed;
-  //           var megabytesPerSecond = (messagesPerSecond * _bytesPerMessage) / (1024 * 1024);
-
-  //           Console.WriteLine($"Received {messagesReceived} messages of size {_bytesPerMessage} in {elapsed:N2}s " +
-  //               $"({messagesPerSecond:N2} msg/s, {megabytesPerSecond:N2} MB/s)");
-  //       }
-  //       finally
-  //       {
-  //           foreach (var consumer in consumers)
-  //           {
-  //               await consumer.DisposeAsync();
-  //           }
-  //       }
-  //   }
+  return messagesReceived;
 }
 
 main().catch(err => {
