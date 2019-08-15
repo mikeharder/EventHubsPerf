@@ -9,10 +9,6 @@ import com.azure.messaging.eventhubs.PartitionProperties;
 
 import org.apache.commons.cli.*;
 
-/**
- * Hello world!
- *
- */
 public class App {
     private static final String _eventHubName = "test";
 
