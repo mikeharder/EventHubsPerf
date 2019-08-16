@@ -1,12 +1,16 @@
 package com.microsoft.eventhubsconsumeperf;
 
-import java.util.List;
+import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
 
 import com.azure.messaging.eventhubs.EventHubAsyncClient;
 import com.azure.messaging.eventhubs.EventHubClientBuilder;
+import com.azure.messaging.eventhubs.EventHubConsumer;
 import com.azure.messaging.eventhubs.PartitionProperties;
+import com.azure.messaging.eventhubs.models.EventPosition;
 
 import org.apache.commons.cli.*;
+import org.apache.qpid.proton.InterruptException;
 
 import reactor.core.publisher.Flux;
 
@@ -19,7 +23,7 @@ public class App {
     private static final int _bytesPerMessage = 1024;
     private static final byte[] _payload = new byte[_bytesPerMessage];
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException, IOException {
         Options options = new Options();
 
         Option clientsOption = new Option("c", "clients", true, "Number of client instances");
@@ -56,7 +60,8 @@ public class App {
         ReceiveMessages(connectionString, partitions, clients, verbose);
     }
 
-    static void ReceiveMessages(String connectionString, int numPartitions, int numClients, boolean verbose) {
+    static void ReceiveMessages(String connectionString, int numPartitions, int numClients, boolean verbose)
+            throws InterruptedException, InterruptException, IOException {
         System.out.println(String.format("Receiving messages from %d partitions using %d client instances",
                 numPartitions, numClients));
 
@@ -70,10 +75,10 @@ public class App {
             EventHubAsyncClient client = clients[0];
 
             Flux<String> partitionIds = client.getPartitionIds().take(numPartitions);
-            List<PartitionProperties> partitions = partitionIds.flatMap(id -> client.getPartitionProperties(id))
+            PartitionProperties[] partitions = partitionIds.flatMap(id -> client.getPartitionProperties(id))
                     .collectSortedList((PartitionProperties p1, PartitionProperties p2) -> Integer
                             .compare(Integer.parseInt(p1.id()), Integer.parseInt(p2.id())))
-                    .block();
+                    .block().toArray(new PartitionProperties[0]);
 
             long totalCount = 0;
             for (PartitionProperties partition : partitions) {
@@ -90,13 +95,43 @@ public class App {
             if (verbose) {
                 System.out.println(String.format("Total Count: %d", totalCount));
             }
+
+            EventHubConsumer[] consumers = new EventHubConsumer[numPartitions];
+            for (int i = 0; i < numPartitions; i++) {
+                consumers[i] = clients[i % numClients].createConsumer(EventHubAsyncClient.DEFAULT_CONSUMER_GROUP_NAME,
+                        partitions[i].id(), EventPosition.earliest());
+            }
+
+            try {
+                CountDownLatch countDownLatch = new CountDownLatch((int) totalCount);
+                
+                long start = System.nanoTime();
+                for (int i = 0; i < numPartitions; i++) {
+                    consumers[i].receive().subscribe(event -> countDownLatch.countDown());
+                }
+                countDownLatch.await();
+                long end = System.nanoTime();
+
+                double elapsed = (end - start) / 1000000000;
+                long messagesReceived = totalCount;
+                double messagesPerSecond = messagesReceived / elapsed;
+                double megabytesPerSecond = (messagesPerSecond * _bytesPerMessage) / (1024 * 1024);
+
+                System.out.println(String.format("Received %d messages of size %d in %.2fs (%.2f msg/s, %.2f MB/s))",
+                    messagesReceived, _bytesPerMessage, elapsed, messagesPerSecond, megabytesPerSecond));
+            } finally {
+                for (EventHubConsumer consumer : consumers) {
+                    consumer.close();
+                }
+            }
         } finally {
             for (EventHubAsyncClient client : clients) {
                 client.close();
             }
         }
 
-        // Workaround for "IllegalThreadStateException on shutdown from maven exec plugin"
+        // Workaround for "IllegalThreadStateException on shutdown from maven exec
+        // plugin"
         // https://github.com/ReactiveX/RxJava/issues/2833
         System.exit(0);
     }
