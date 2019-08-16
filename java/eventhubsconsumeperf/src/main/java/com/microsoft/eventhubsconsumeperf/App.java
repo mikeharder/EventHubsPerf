@@ -19,9 +19,7 @@ public class App {
 
     // Settings copied from
     // https://docs.microsoft.com/en-us/azure/event-hubs/event-hubs-faq#how-much-does-a-single-capacity-unit-let-me-achieve
-    private static final int _messagesPerBatch = 100;
     private static final int _bytesPerMessage = 1024;
-    private static final byte[] _payload = new byte[_bytesPerMessage];
 
     public static void main(String[] args) throws InterruptedException, IOException {
         Options options = new Options();
