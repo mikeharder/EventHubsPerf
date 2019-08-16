@@ -50,8 +50,8 @@ namespace EventHubsConsumePerf
 
         static async Task Run(string connectionString, int partitions, int clients, bool verbose)
         {
-            // await SendMessages(connectionString);
-            await ReceiveMessages(connectionString, partitions, clients, verbose);
+            await SendMessages(connectionString);
+            // await ReceiveMessages(connectionString, partitions, clients, verbose);
         }
 
         static async Task ReceiveMessages(string connectionString, int numPartitions, int numClients, bool verbose)
@@ -150,8 +150,10 @@ namespace EventHubsConsumePerf
             {
                 await using (var producer = client.CreateProducer())
                 {
-                    for (var j = 0; j < 1000; j++)
+                    for (var j = 0; j < 10000; j++)
                     {
+                        Console.WriteLine(j);
+
                         var eventBatch = new EventData[_messagesPerBatch];
                         for (var i = 0; i < _messagesPerBatch; i++)
                         {
