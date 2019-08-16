@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--clients", help="Number of client instances", default=1, type=int)
 parser.add_argument("-p", "--partitions", help="Number of partitions to receive from", default=1, type=int)
 parser.add_argument("-v", "--verbose", help="Enable verbose output", action="store_true")
+parser.add_argument("-d", "--debug", help="Enable debug output", action="store_true")
 
 args = parser.parse_args()
 
@@ -58,17 +59,20 @@ async def run(args):
 
     print(f"Received {messagesReceived} messages of size {BYTES_PER_MESSAGE} in {elapsed}s ({messagesPerSecond} msg/s, {megabytesPerSecond} MB/s)")
 
-async def receive_all_messages(consumer, partition):
+async def receive_all_messages(args, consumer, partition):
     messagesReceived = 0
     lastSequenceNumber = -1
     while lastSequenceNumber < partition["last_enqueued_sequence_number"]:
         # BUG: Last batch call never returns if batch is unfilled and timeout is not specified
         events = await consumer.receive(max_batch_size=MESSAGES_PER_BATCH, timeout=1)
         
-        messagesReceived += len(events)
-        lastSequenceNumber = events[-1].sequence_number
-        print("[" + partition["id"] + "] messagesReceived: " + str(messagesReceived))
-        print("[" + partition["id"] + "] lastSequenceNumber: " + str(lastSequenceNumber))
+        if len(events) > 0:
+            messagesReceived += len(events)
+            lastSequenceNumber = events[-1].sequence_number
+        
+        if args.debug:
+            print("[" + partition["id"] + "] messagesReceived: " + str(messagesReceived))
+            print("[" + partition["id"] + "] lastSequenceNumber: " + str(lastSequenceNumber))
     return messagesReceived
 
 asyncio.run(run(args))
