@@ -1,8 +1,10 @@
 import argparse
 import asyncio
 import os
+import time
 
 from azure.eventhub.aio import EventHubClient
+from azure.eventhub import EventPosition
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--clients", help="Number of client instances", default=1, type=int)
@@ -41,31 +43,32 @@ async def run(args):
     if args.verbose:
         print(f"Total Count: {totalCount}")
 
-    # var consumers = new EventHubConsumer[numPartitions];
-    # for (var i = 0; i < numPartitions; i++)
-    # {
-    #     consumers[i] = clients[i % numClients].CreateConsumer(EventHubConsumer.DefaultConsumerGroupName, partitions[i].Id, EventPosition.Earliest);
-    # }
+    consumers = []
+    for i in range(args.partitions):
+        consumers.append(clients[i % args.clients].create_consumer(consumer_group="$default", partition_id=partitions[i]["id"], event_position=EventPosition("-1")))
 
-    # try
-    # {
-    #     var receiveTasks = new Task<(int messagesReceived, long lastSequenceNumber)>[numPartitions];
-    #     var sw = Stopwatch.StartNew();
-    #     for (var i = 0; i < numPartitions; i++)
-    #     {
-    #         receiveTasks[i] = ReceiveAllMessages(consumers[i], partitions[i]);
-    #     }
-    #     var results = await Task.WhenAll(receiveTasks);
-    #     sw.Stop();
+    start = time.time()
+    results = await asyncio.gather(*[receive_all_messages(consumers[i], partitions[i]) for i in range(args.partitions)])
+    end = time.time()
 
-    #     var elapsed = sw.Elapsed.TotalSeconds;
-    #     var messagesReceived = results.Select(r => r.messagesReceived).Sum();
-    #     var messagesPerSecond = messagesReceived / elapsed;
-    #     var megabytesPerSecond = (messagesPerSecond * _bytesPerMessage) / (1024 * 1024);
+    elapsed = end - start
+    messagesReceived = sum(results)
+    messagesPerSecond = messagesReceived / elapsed
+    megabytesPerSecond = (messagesPerSecond * BYTES_PER_MESSAGE) / (1024 * 1024)
 
-    #     Console.WriteLine($"Received {messagesReceived} messages of size {_bytesPerMessage} in {elapsed:N2}s " +
-    #         $"({messagesPerSecond:N2} msg/s, {megabytesPerSecond:N2} MB/s)");
-    # }
+    print(f"Received {messagesReceived} messages of size {BYTES_PER_MESSAGE} in {elapsed}s ({messagesPerSecond} msg/s, {megabytesPerSecond} MB/s)")
 
+async def receive_all_messages(consumer, partition):
+    messagesReceived = 0
+    lastSequenceNumber = -1
+    while lastSequenceNumber < partition["last_enqueued_sequence_number"]:
+        # BUG: Last batch call never returns if batch is unfilled and timeout is not specified
+        events = await consumer.receive(max_batch_size=MESSAGES_PER_BATCH, timeout=1)
+        
+        messagesReceived += len(events)
+        lastSequenceNumber = events[-1].sequence_number
+        print("[" + partition["id"] + "] messagesReceived: " + str(messagesReceived))
+        print("[" + partition["id"] + "] lastSequenceNumber: " + str(lastSequenceNumber))
+    return messagesReceived
 
 asyncio.run(run(args))
