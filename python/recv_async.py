@@ -49,7 +49,7 @@ async def run(args):
         consumers.append(clients[i % args.clients].create_consumer(consumer_group="$default", partition_id=partitions[i]["id"], event_position=EventPosition("-1")))
 
     start = time.time()
-    results = await asyncio.gather(*[receive_all_messages(consumers[i], partitions[i]) for i in range(args.partitions)])
+    results = await asyncio.gather(*[receive_all_messages(args, consumers[i], partitions[i]) for i in range(args.partitions)])
     end = time.time()
 
     elapsed = end - start
