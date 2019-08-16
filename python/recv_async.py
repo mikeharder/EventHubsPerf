@@ -52,6 +52,8 @@ async def run(args):
     results = await asyncio.gather(*[receive_all_messages(args, consumers[i], partitions[i]) for i in range(args.partitions)])
     end = time.time()
 
+    await asyncio.gather(*[consumer.close() for consumer in consumers])
+
     elapsed = end - start
     messagesReceived = sum(results)
     messagesPerSecond = messagesReceived / elapsed
