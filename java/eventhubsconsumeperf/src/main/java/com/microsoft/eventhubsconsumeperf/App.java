@@ -112,7 +112,7 @@ public class App {
                 countDownLatch.await();
                 long end = System.nanoTime();
 
-                double elapsed = (end - start) / 1000000000;
+                double elapsed = 1.0 * (end - start) / 1000000000;
                 long messagesReceived = totalCount;
                 double messagesPerSecond = messagesReceived / elapsed;
                 double megabytesPerSecond = (messagesPerSecond * _bytesPerMessage) / (1024 * 1024);
