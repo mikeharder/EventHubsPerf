@@ -73,7 +73,6 @@ async def receive_all_messages(args, consumer, partition):
             lastSequenceNumber = events[-1].sequence_number
         
         if args.debug:
-            print("[" + partition["id"] + "] messagesReceived: " + str(messagesReceived))
             print("[" + partition["id"] + "] lastSequenceNumber: " + str(lastSequenceNumber))
     return messagesReceived
 
