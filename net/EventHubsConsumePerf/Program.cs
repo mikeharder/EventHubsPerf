@@ -50,8 +50,8 @@ namespace EventHubsConsumePerf
 
         static async Task Run(string connectionString, int partitions, int clients, bool verbose)
         {
-            await SendMessages(connectionString);
-            // await ReceiveMessages(connectionString, partitions, clients, verbose);
+            // await SendMessages(connectionString);
+            await ReceiveMessages(connectionString, partitions, clients, verbose);
         }
 
         static async Task ReceiveMessages(string connectionString, int numPartitions, int numClients, bool verbose)
