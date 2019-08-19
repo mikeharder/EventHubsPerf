@@ -33,6 +33,9 @@ public class App {
         Option verboseOption = new Option("v", "verbose", false, "Enables verbose output");
         options.addOption(verboseOption);
 
+        Option debugOption = new Option("d", "debug", false, "Enables debug output");
+        options.addOption(debugOption);
+
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         CommandLine cmd = null;
@@ -48,6 +51,7 @@ public class App {
         int clients = Integer.parseInt(cmd.getOptionValue("clients", "1"));
         int partitions = Integer.parseInt(cmd.getOptionValue("partitions", "1"));
         boolean verbose = cmd.hasOption("verbose");
+        boolean debug = cmd.hasOption("debug");
 
         String connectionString = System.getenv("EVENT_HUBS_CONNECTION_STRING");
         if (connectionString == null || connectionString.isEmpty()) {
@@ -55,10 +59,10 @@ public class App {
             System.exit(1);
         }
 
-        ReceiveMessages(connectionString, partitions, clients, verbose);
+        ReceiveMessages(connectionString, partitions, clients, verbose, debug);
     }
 
-    static void ReceiveMessages(String connectionString, int numPartitions, int numClients, boolean verbose)
+    static void ReceiveMessages(String connectionString, int numPartitions, int numClients, boolean verbose, boolean debug)
             throws InterruptedException, InterruptException, IOException {
         System.out.println(String.format("Receiving messages from %d partitions using %d client instances",
                 numPartitions, numClients));
@@ -105,7 +109,15 @@ public class App {
                 
                 long start = System.nanoTime();
                 for (int i = 0; i < numPartitions; i++) {
-                    consumers[i].receive().subscribe(event -> countDownLatch.countDown());
+                    consumers[i].receive().subscribe(event -> {
+                        countDownLatch.countDown();
+                        if (debug) {
+                            long count = countDownLatch.getCount();
+                            if (count % 1000 == 0) {
+                                System.out.println(count);
+                            }    
+                        }
+                    });
                 }
                 countDownLatch.await();
                 long end = System.nanoTime();
