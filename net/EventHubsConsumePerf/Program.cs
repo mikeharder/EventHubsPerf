@@ -26,6 +26,9 @@ namespace EventHubsConsumePerf
             [Option('p', "partitions", Default = 1)]
             public int Partitions { get; set; }
 
+            [Option('s', "send")]
+            public int Send { get; set; }
+
             [Option('v', "verbose", Default = false)]
             public bool Verbose { get; set; }
         }
@@ -44,14 +47,20 @@ namespace EventHubsConsumePerf
             var connectionString = Environment.GetEnvironmentVariable("EVENT_HUBS_CONNECTION_STRING");
 
             await Parser.Default.ParseArguments<Options>(args).MapResult(
-                async o => await Run(connectionString, o.Partitions, o.Clients, o.Verbose),
+                async o => await Run(connectionString, o.Partitions, o.Clients, o.Verbose, o.Send),
                 errors => Task.CompletedTask);
         }
 
-        static async Task Run(string connectionString, int partitions, int clients, bool verbose)
+        static async Task Run(string connectionString, int partitions, int clients, bool verbose, int send)
         {
-            // await SendMessages(connectionString);
-            await ReceiveMessages(connectionString, partitions, clients, verbose);
+            if (send > 0)
+            {
+                await SendMessages(connectionString, send);
+            }
+            else
+            {
+                await ReceiveMessages(connectionString, partitions, clients, verbose);
+            }
         }
 
         static async Task ReceiveMessages(string connectionString, int numPartitions, int numClients, bool verbose)
@@ -144,13 +153,13 @@ namespace EventHubsConsumePerf
             return (messagesReceived, lastSequenceNumber);
         }
 
-        static async Task SendMessages(string connectionString)
+        static async Task SendMessages(string connectionString, int messages)
         {
             await using (var client = new EventHubClient(connectionString, _eventHubName))
             {
                 await using (var producer = client.CreateProducer())
                 {
-                    for (var j = 0; j < 10000; j++)
+                    for (var j = 0; j < (messages / _messagesPerBatch); j++)
                     {
                         Console.WriteLine(j);
 
