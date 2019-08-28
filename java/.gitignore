@@ -46,6 +46,7 @@ local.properties
 .classpath
 .project
 target
+bin
 .idea
 *.iml
 
