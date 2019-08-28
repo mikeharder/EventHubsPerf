@@ -4,6 +4,7 @@
 **/out/
 
 # files
+.dockerignore
 Dockerfile*
 **/*.trx
 **/*.md
