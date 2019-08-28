@@ -17,8 +17,9 @@
    * https://get.docker.com
 
 ## Build and Run Benchmarks
-1. `export "EVENT_HUBS_CONNECTION_STRING=<your-connection-string>"`
-2. `cd` to desired benchmark directory
-3. Run `./build.sh` to create docker image
-4. Run `./run.sh --help` to view command-line parameters
-5. Run `./run.sh -p 1 -c 1` (with desired parameters) to run test
+1. SSH to VM
+2. `export "EVENT_HUBS_CONNECTION_STRING=<your-connection-string>"`
+3. `cd` to desired benchmark directory
+4. Run `./build.sh` to create docker image
+5. Run `./run.sh --help` to view command-line parameters
+6. Run `./run.sh -p 1 -c 1` (with desired parameters) to run test
