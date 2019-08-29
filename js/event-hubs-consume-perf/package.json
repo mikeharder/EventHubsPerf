@@ -3,9 +3,6 @@
   "version": "1.0.0-preview.2",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "perf-test": "ts-node -T consumePerf.ts"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
