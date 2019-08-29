@@ -15,7 +15,8 @@ async function main(): Promise<void> {
     .option('-c, --clients <clients>', 'number of client instances', 1)
     .option('-p, --partitions <partitions>', 'number of partitions to receive from', 1)
     .option('-r, --processes <processes>', 'number of processes to use', 1)
-    .option('-v, --verbose', 'verbose', false);
+    .option('-v, --verbose', 'verbose', false)
+    .option('-d, --debug', 'debug', false);
 
   commander.parse(process.argv);
 
@@ -24,14 +25,14 @@ async function main(): Promise<void> {
     throw 'Env var EVENT_HUBS_CONNECTION_STRING must be set';
   }
 
-  await run(connectionString, commander.partitions, commander.clients, commander.processes, commander.verbose);
+  await run(connectionString, commander.partitions, commander.clients, commander.processes, commander.verbose, commander.debug);
 }
 
-async function run(connectionString: string, numPartitions: number, numClients: number, numProcesses: number, verbose: boolean): Promise<void> {
-  await receiveMessages(connectionString, numPartitions, numClients, numProcesses, verbose);
+async function run(connectionString: string, numPartitions: number, numClients: number, numProcesses: number, verbose: boolean, debug: boolean): Promise<void> {
+  await receiveMessages(connectionString, numPartitions, numClients, numProcesses, verbose, debug);
 }
 
-async function receiveMessages(connectionString: string, numPartitions: number, numClients: number, numProcesses: number, verbose: boolean): Promise<void> {
+async function receiveMessages(connectionString: string, numPartitions: number, numClients: number, numProcesses: number, verbose: boolean, debug: boolean): Promise<void> {
   console.log(`Receiving messages from ${numPartitions} partition(s) using ${numClients} client instanc(es) and ${numProcesses} child process(es)`);
 
   const client = new EventHubClient(connectionString, eventHubName);
@@ -64,6 +65,7 @@ async function receiveMessages(connectionString: string, numPartitions: number, 
 
     // Create child processes
     const childProcesses: ChildProcess[] = [];
+    const readyPromises: Promise<unknown>[] = [];
 
     for (let i = 0; i < numProcesses; i++) {
       const childProcess = fork('consumePerfReceive.js');
@@ -72,14 +74,22 @@ async function receiveMessages(connectionString: string, numPartitions: number, 
       const partitionsPerProcess = numPartitions / numProcesses;
       const firstPartition = i * partitionsPerProcess;
 
+      readyPromises[i] = new Promise(resolve => {
+        childProcess.once('message', msg => resolve(msg));
+      });
+
       // Send parameters
       childProcess.send({
         messagesPerBatch: messagesPerBatch, connectionString: connectionString, eventHubName: eventHubName,
         numClients: clientsPerProcess, firstPartition: firstPartition, numPartitions: numPartitions / numProcesses,
-        verbose: verbose
+        verbose: verbose, debug: debug
       })
+
       childProcesses[i] = childProcess;
     }
+
+    // Wait until all children are ready
+    await Promise.all(readyPromises);
 
     const receivePromises: Promise<number[]>[] = [];
     const startMs = performance.now();
@@ -88,6 +98,10 @@ async function receiveMessages(connectionString: string, numPartitions: number, 
       
       // Tell child process to start receiving
       receivePromises[i] = new Promise<number[]>(resolve => {
+        if (debug) {
+          console.log(`starting receive on child process ${i}`);
+        }
+        
         childProcess.send("go");
 
         childProcess.once('message', (msg: number[]) => {
