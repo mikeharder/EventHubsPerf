@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   try {
     const client = clients[0];
 
-    const partitionIds = (await client.getPartitionIds()).slice(firstPartition, numPartitions);
+    const partitionIds = (await client.getPartitionIds()).slice(firstPartition, firstPartition + numPartitions);
 
     const partitions: PartitionProperties[] = [];
     for (let partitionId of partitionIds) {
