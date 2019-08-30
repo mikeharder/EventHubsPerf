@@ -81,7 +81,7 @@ async function receiveAllMessages(messagesPerBatch: number, consumer: EventHubCo
     lastSequenceNumber = events[events.length - 1].sequenceNumber;
 
     if (debug) {
-      console.log(messagesReceived);
+      console.log(`[${partition.partitionId}] ${messagesReceived}`);
     }
   }
 
